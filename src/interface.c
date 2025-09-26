@@ -2,8 +2,51 @@
    SPDX-License-Identifier: Apache-2.0 */
 
 #include "provider.h"
+#ifndef NO_DLFCN
+#define NO_DLFCN 0
+#endif
+#ifdef _WIN32
+/* Try to detect if <dlfcn.h> is present (some mingw-w64 toolchains ship a stub).
+ * If not, fall back to Win32 loading APIs. */
+#if defined(__has_include)
+# if __has_include(<dlfcn.h>)
+#  undef NO_DLFCN
+#  define NO_DLFCN 0
+# else
+#  undef NO_DLFCN
+#  define NO_DLFCN 1
+# endif
+#else
+/* Conservative: assume missing */
+# undef NO_DLFCN
+# define NO_DLFCN 1
+#endif
+#endif /* _WIN32 */
+#if NO_DLFCN == 1
+#include <windows.h>
+#ifndef RTLD_NOW
+#define RTLD_NOW 0
+#endif
+#ifndef RTLD_LOCAL
+#define RTLD_LOCAL 0
+#endif
+#ifndef RTLD_DEEPBIND
+#define RTLD_DEEPBIND 0
+#endif
+#define dlopen(p,f) LoadLibraryA(p)
+#define dlsym(h,s) GetProcAddress((HMODULE)(h), (s))
+#define dlclose(h) FreeLibrary((HMODULE)(h))
+#define dlerror() "dynamic loading error"
+#else
 #include <dlfcn.h>
+#endif
 #include <string.h>
+
+/* On Windows headers may define 'interface' macro (COM). We use a field
+ * named 'interface' in our structs; undef it to avoid replacement. */
+#ifdef interface
+#undef interface
+#endif
 
 /* Wrapper Interface on top of PKCS#11 interfaces.
  * This allows us to support multiple versions of PKCS#11 drivers
@@ -179,9 +222,9 @@ static CK_RV p11prov_interface_init(P11PROV_MODULE *mctx)
         return CKR_HOST_MEMORY;
     }
 
-    intf->GetInterface = dlsym(mctx->dlhandle, "C_GetInterface");
+    intf->GetInterface = (CK_C_GetInterface)dlsym(mctx->dlhandle, "C_GetInterface");
     if (!intf->GetInterface) {
-        char *err = dlerror();
+        const char *err = dlerror();
         P11PROV_debug(
             "C_GetInterface() not available. Falling back to "
             "C_GetFunctionList(): %s",
@@ -201,7 +244,7 @@ static CK_RV p11prov_interface_init(P11PROV_MODULE *mctx)
             .flags = 0,
         };
 
-        intf->GetFunctionList = dlsym(mctx->dlhandle, "C_GetFunctionList");
+    intf->GetFunctionList = (CK_C_GetFunctionList)dlsym(mctx->dlhandle, "C_GetFunctionList");
         if (intf->GetFunctionList) {
             ret = intf->GetFunctionList(
                 (CK_FUNCTION_LIST_PTR_PTR)&deflt.pFunctionList);
@@ -209,7 +252,7 @@ static CK_RV p11prov_interface_init(P11PROV_MODULE *mctx)
                 ck_interface = &deflt;
             }
         } else {
-            char *err = dlerror();
+            const char *err = dlerror();
             P11PROV_debug("dlsym() failed: %s", err);
             ret = CKR_GENERAL_ERROR;
         }
@@ -303,11 +346,14 @@ CK_RV p11prov_module_init(P11PROV_MODULE *mctx)
 
     P11PROV_debug("PKCS#11: Initializing the module: %s", mctx->path);
 
+/* Clear any previous dynamic loader error only when real dlfcn is used */
+#if NO_DLFCN == 0
     dlerror();
+#endif
 
     mctx->dlhandle = dlopen(mctx->path, P11PROV_DLOPEN_FLAGS);
     if (!mctx->dlhandle) {
-        char *err = dlerror();
+        const char *err = dlerror();
         ret = CKR_GENERAL_ERROR;
         P11PROV_debug("dlopen(%s) failed: %s", mctx->path, err);
         goto done;
@@ -372,7 +418,7 @@ void p11prov_module_free(P11PROV_MODULE *mctx)
         p11prov_Finalize(mctx->provctx, NULL);
         dlclose(mctx->dlhandle);
     }
-    OPENSSL_free(mctx->interface);
+    OPENSSL_free(mctx->interface); /* macro expands with file/line */
     OPENSSL_free(mctx->path);
     OPENSSL_free(mctx->init_args);
     OPENSSL_free(mctx);

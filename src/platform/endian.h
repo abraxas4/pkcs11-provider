@@ -62,8 +62,13 @@
 #elif defined(__ANDROID__) || defined(__CYGWIN__) || defined(__GNUC__) || \
 	defined(__GNU__)
 
+/* On MinGW (Windows) <byteswap.h> / <endian.h> may not be available or
+ * may provide partial definitions. We rely on the fallback implementations
+ * below instead. Detect Windows via _WIN32 and skip including them there. */
+#ifndef _WIN32
 #include <byteswap.h>
 #include <endian.h>
+#endif
 
 #else /* if defined(__DragonFly__) || defined(__FreeBSD__) || \
        * defined(__NetBSD__) || defined(__OpenBSD__) || defined(__bsdi__) */

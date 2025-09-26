@@ -1,0 +1,45 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Meson Setup",
+      "type": "shell",
+      "command": "meson setup builddir",
+      "problemMatcher": []
+    },
+    {
+      "label": "Meson Configure (Debug)",
+      "type": "shell",
+      "command": "meson configure -Dbuildtype=debug builddir",
+      "problemMatcher": [],
+      "dependsOn": ["Meson Setup"],
+      "runOptions": {"runOn": "folderOpen"}
+    },
+    {
+      "label": "Meson Compile",
+      "type": "shell",
+      "command": "meson compile -C builddir",
+      "group": {"kind": "build", "isDefault": true},
+      "problemMatcher": ["$gcc"],
+      "dependsOn": ["Meson Setup"]
+    },
+    {
+      "label": "Meson Test",
+      "type": "shell",
+      "command": "meson test -C builddir",
+      "problemMatcher": []
+    },
+    {
+      "label": "Meson Install",
+      "type": "shell",
+      "command": "meson install -C builddir",
+      "problemMatcher": []
+    },
+    {
+      "label": "Clean Builddir",
+      "type": "shell",
+      "command": "powershell -NoLogo -NoProfile -Command \"Remove-Item -Recurse -Force builddir\"",
+      "problemMatcher": []
+    }
+  ]
+}

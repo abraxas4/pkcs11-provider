@@ -8,6 +8,17 @@
 #define _XOPEN_SOURCE 700
 #include "config.h"
 
+/* Ensure pthread types are visible before headers that depend on them.
+ * Only provider.c previously pulled in <pthread.h>, causing other
+ * translation units to miss the type definitions (pthread_mutex_t, etc.)
+ * when including just provider.h -> util.h. */
+#ifdef _WIN32
+/* MinGW provides a pthread compatibility layer (winpthreads). */
+#include <pthread.h>
+#else
+#include <pthread.h>
+#endif
+
 #include <stdbool.h>
 #include <sys/types.h>
 
